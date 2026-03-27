@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZH-GPT 翻译器</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      padding: 16px 24px;
+      background: #141414;
+      border-bottom: 1px solid #2a2a2a;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+      margin-right: auto;
+    }
+
+    .config-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .config-group label {
+      font-size: 12px;
+      color: #888;
+      white-space: nowrap;
+    }
+
+    .config-group input {
+      background: #1e1e1e;
+      border: 1px solid #333;
+      color: #e0e0e0;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
+    .config-group input:focus {
+      outline: none;
+      border-color: #555;
+    }
+
+    #apiKey { width: 200px; }
+    #baseUrl { width: 280px; }
+    #model { width: 160px; }
+    #temperature { width: 60px; }
+
+    .main {
+      flex: 1;
+      display: flex;
+      padding: 16px;
+      gap: 16px;
+      min-height: 0;
+    }
+
+    .panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .panel-header span {
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    textarea {
+      flex: 1;
+      background: #141414;
+      border: 1px solid #2a2a2a;
+      color: #e0e0e0;
+      padding: 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.6;
+      resize: none;
+      font-family: inherit;
+    }
+
+    textarea:focus { outline: none; border-color: #444; }
+    textarea::placeholder { color: #555; }
+
+    #output { cursor: default; }
+
+    .footer {
+      padding: 16px 24px;
+      background: #141414;
+      border-top: 1px solid #2a2a2a;
+      display: flex;
+      justify-content: center;
+    }
+
+    #translateBtn {
+      background: #fff;
+      color: #000;
+      border: none;
+      padding: 12px 48px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    #translateBtn:hover { opacity: 0.9; }
+    #translateBtn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .loading #translateBtn {
+      position: relative;
+      color: transparent;
+    }
+
+    .loading #translateBtn::after {
+      content: "";
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #000;
+      border-top-color: transparent;
+      border-radius: 50%;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+
+    .error { color: #ff6b6b; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>ZH-GPT 翻译器</h1>
+    <span style="font-size:11px;color:#555;margin-right:auto;">⚠️ 仅支持 OpenAI chat.completion 格式 API</span>
+    <div class="config-group">
+      <label>API Key</label>
+      <input type="password" id="apiKey" placeholder="sk-...">
+    </div>
+    <div class="config-group">
+      <label>Base URL</label>
+      <input type="text" id="baseUrl" placeholder="https://api.openai.com/v1">
+    </div>
+    <div class="config-group">
+      <label>Model</label>
+      <input type="text" id="model" value="gpt-4o">
+    </div>
+    <div class="config-group">
+      <label>Temperature</label>
+      <input type="number" id="temperature" value="0.7" min="0" max="2" step="0.1">
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="panel">
+      <div class="panel-header"><span>输入</span></div>
+      <textarea id="input" placeholder="在此输入普通中文..."></textarea>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span>输出</span></div>
+      <textarea id="output" readonly placeholder="翻译结果..."></textarea>
+    </div>
+  </div>
+
+  <div class="footer">
+    <button id="translateBtn">翻译</button>
+  </div>
+
+  <script>
+    const SYSTEM_PROMPT = `你是一个文风转换器，将普通中文（ZH-CN）转写成 GPT-5 系列的中文表达风格（ZH-GPT）。
+
+## 核心原则
+
+不是逐词替换，而是重构表达结构和思维节奏。
+GPT-5 的中文不是"更正式的中文"，而是"工程师写技术文档时的口语化表达"。
+
+## 结构规律
+
+每段回答的内部结构通常是：
+1. 先给结论（一句话）
+2. 再列依据或拆解（多条平行结构）
+3. 最后给判断或建议落点
+
+长回答会有显式的 section 分组，如"摘要""依据""判断""我建议的落点"。
+
+当用户说了一个观点，先用一句话 ack，然后立刻"我会把它收敛成一句更准确的话："，然后给出自己重新表述的版本。
+
+收尾句通常是行动导向的，如"如果你愿意，我下一轮可以直接给你……"。
+
+## 词汇替换表
+
+| 普通中文 | ZH-GPT |
+|---------|--------|
+| 根本原因 | 根因 |
+| 写代码/实现 | 落代码 |
+| 最有价值的改动 | 最值回票价的一刀 / 下一刀最值钱的是 |
+| 更稳定/更健壮 | 更硬 |
+| 找出来/定位到 | 揪出来 |
+| 缩小范围/约束 | 收口 / 收束 / 收敛（这三个混用） |
+| 能接受/兼容 | 能吃 |
+| 逻辑顺畅 | 规则就很顺 |
+| 最小改动 | "最小改动"（加引号强调） |
+| 现有的 | 现有 |
+| 语义 | 语义（高频，几乎替代"含义""意思"） |
+| 框架/架构 | 骨架 |
+| 承接/衔接 | 承接 |
+| 终止状态 | 终态 |
+| 路径/方案 | 路径 / 落点 |
+| 存储/记录 | 落盘（动词）/ 落（某地方） |
+| 确认某事没问题 | 确认 [XXX] 确实没被影响到 |
+
+## 句式口癖
+
+- 对比两个东西："X 不是 Y，而是 Z。" 
+- 给出精确定义："X 的真正含义是……"
+- 补充精度："更准确一点说，……"
+- 发现规律："这两个刚好对应……"
+- 做总结锚点："也就是说，……"
+- 指出重要性："这里更关键的是，……"
+- ack 用户观点："这个补充很关键，我认同。"，然后立刻用自己的语言重述
+- 列依据时："按当前代码看，……" / "这证明……"
+- 给建议时："建议顺手把……明确收口成……"（不说"我建议你"）
+- 结尾行动项："如果你愿意，我下一轮可以直接给你……"
+
+## 整体风格要求
+
+- 语气自信，不模糊，不加"可能""也许"之类的保留语
+- 用工程术语描述产品/代码概念，但不丢失口语节奏
+- 喜欢平行结构，列点时每条结构保持一致
+- 括号里做补充定义，如"也就是说 X（即 Y）"
+- 绝不说"以上""如上所述"，用"这里""此处"代替
+- 不说"非常""十分"，直接说"很硬""很顺""很工程"
+
+## 任务
+
+将用户输入的标准中文改写成符合上述特征的 ZH-GPT 风格。
+保留原意，只改变结构和表达方式。
+直接输出改写结果，不解释修改了什么。
+`;
+
+    const apiKeyInput = document.getElementById('apiKey');
+    const baseUrlInput = document.getElementById('baseUrl');
+    const modelInput = document.getElementById('model');
+    const temperatureInput = document.getElementById('temperature');
+    const inputTextarea = document.getElementById('input');
+    const outputTextarea = document.getElementById('output');
+    const translateBtn = document.getElementById('translateBtn');
+
+    // Load from localStorage
+    apiKeyInput.value = localStorage.getItem('zhgpt_apikey') || '';
+    baseUrlInput.value = localStorage.getItem('zhgpt_baseurl') || 'https://api.openai.com/v1';
+    modelInput.value = localStorage.getItem('zhgpt_model') || 'gpt-4o';
+    temperatureInput.value = localStorage.getItem('zhgpt_temp') || '0.7';
+
+    // Save on change
+    apiKeyInput.addEventListener('change', () => localStorage.setItem('zhgpt_apikey', apiKeyInput.value));
+    baseUrlInput.addEventListener('change', () => localStorage.setItem('zhgpt_baseurl', baseUrlInput.value));
+    modelInput.addEventListener('change', () => localStorage.setItem('zhgpt_model', modelInput.value));
+    temperatureInput.addEventListener('change', () => localStorage.setItem('zhgpt_temp', temperatureInput.value));
+
+    async function translate() {
+      const apiKey = apiKeyInput.value.trim();
+      const baseUrl = baseUrlInput.value.trim();
+      const model = modelInput.value.trim();
+      const temperature = parseFloat(temperatureInput.value) || 0.7;
+      const input = inputTextarea.value.trim();
+
+      if (!apiKey) {
+        outputTextarea.value = '错误：请输入 API Key';
+        outputTextarea.classList.add('error');
+        return;
+      }
+
+      if (!input) {
+        outputTextarea.value = '错误：请输入要翻译的内容';
+        outputTextarea.classList.add('error');
+        return;
+      }
+
+      translateBtn.disabled = true;
+      outputTextarea.value = '';
+      outputTextarea.classList.remove('error');
+      document.body.classList.add('loading');
+
+      try {
+        const endpoint = baseUrl.endsWith('/') ? baseUrl + 'chat/completions' : baseUrl + '/chat/completions';
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT },
+              { role: 'user', content: input }
+            ],
+            temperature: temperature,
+            stream: true
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error?.message || `HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith('data: ')) continue;
+            const data = trimmed.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+              const json = JSON.parse(data);
+              const delta = json.choices?.[0]?.delta?.content;
+              if (delta) {
+                outputTextarea.value += delta;
+                outputTextarea.scrollTop = outputTextarea.scrollHeight;
+              }
+            } catch {}
+          }
+        }
+      } catch (err) {
+        outputTextarea.value = `错误：${err.message}`;
+        outputTextarea.classList.add('error');
+      } finally {
+        translateBtn.disabled = false;
+        document.body.classList.remove('loading');
+      }
+    }
+
+    translateBtn.addEventListener('click', translate);
+    inputTextarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        translate();
+      }
+    });
+  </script>
+</body>
+</html>
