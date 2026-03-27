@@ -173,11 +173,11 @@
     </div>
     <div class="config-group">
       <label>Base URL</label>
-      <input type="text" id="baseUrl" placeholder="https://api.openai.com/v1">
+      <input type="text" id="baseUrl" placeholder="https://openrouter.ai/api/v1">
     </div>
     <div class="config-group">
       <label>Model</label>
-      <input type="text" id="model" value="gpt-4o">
+      <input type="text" id="model" value="openai/gpt-5.3-codex">
     </div>
     <div class="config-group">
       <label>Temperature</label>
@@ -282,8 +282,8 @@ GPT-5 的中文不是"更正式的中文"，而是"工程师写技术文档时�
 
     // Load from localStorage
     apiKeyInput.value = localStorage.getItem('zhgpt_apikey') || '';
-    baseUrlInput.value = localStorage.getItem('zhgpt_baseurl') || 'https://api.openai.com/v1';
-    modelInput.value = localStorage.getItem('zhgpt_model') || 'gpt-4o';
+    baseUrlInput.value = localStorage.getItem('zhgpt_baseurl') || 'https://openrouter.ai/api/v1';
+    modelInput.value = localStorage.getItem('zhgpt_model') || 'openai/gpt-5.3-codex';
     temperatureInput.value = localStorage.getItem('zhgpt_temp') || '0.7';
 
     // Save on change
